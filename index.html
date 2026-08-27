@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股資訊站 MARKET＋資料彙整</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="theme-dark">
+
+<div id="globalToast" class="global-toast"></div>
+
+<div class="wrap">
+  <header>
+    <h1>台股資訊站 <span>MARKET</span></h1>
+    <div class="theme-controls">
+      <button id="themeDarkBtn" class="active">深色</button>
+      <button id="themeLightBtn">淺色</button>
+      <button id="settingsBtn" title="設定 Worker 網址">⚙ 設定</button>
+    </div>
+  </header>
+
+  <div class="settings-panel" id="settingsPanel" hidden>
+    <label for="apiBaseInput">Worker API 網址</label>
+    <input type="text" id="apiBaseInput" class="mono-input" placeholder="https://your-worker.workers.dev">
+    <button id="apiBaseSaveBtn" class="action">儲存</button>
+    <button id="apiBaseResetBtn" class="ghost-btn">還原預設值</button>
+    <div class="settings-hint">原本這個網址是寫死在程式碼裡的,換 Worker 時要改原始碼才能生效。現在存在瀏覽器裡,換了直接貼上儲存即可,兩個分頁(股票查詢／資料彙整)共用同一組設定。</div>
+  </div>
+
+  <nav class="main-tabs" id="mainTabs">
+    <button data-page="home" class="active">首頁</button>
+    <button data-page="stock">股票查詢</button>
+    <button data-page="compare">比較</button>
+    <button data-page="rank">排行榜</button>
+    <button data-page="favorite">收藏</button>
+    <button data-page="aggregate">資料彙整</button>
+  </nav>
+
+  <!-- ============ 首頁:四大指數 ============ -->
+  <div class="main-page active" id="page-home">
+    <div class="index-grid" id="indexGrid">
+      <div class="index-card" data-idx="taiex">
+        <div class="index-name">台股加權指數</div>
+        <div class="index-price" id="idxTaiexPrice">--</div>
+        <div class="index-row"><span>開盤</span><span id="idxTaiexOpen">--</span></div>
+        <div class="index-row"><span>振幅%</span><span id="idxTaiexRange">--</span></div>
+        <div class="index-row"><span>成交量</span><span id="idxTaiexVolume">--</span></div>
+      </div>
+      <div class="index-card" data-idx="dji">
+        <div class="index-name">美股道瓊指數</div>
+        <div class="index-price" id="idxDjiPrice">--</div>
+        <div class="index-row"><span>開盤</span><span id="idxDjiOpen">--</span></div>
+        <div class="index-row"><span>振幅%</span><span id="idxDjiRange">--</span></div>
+        <div class="index-row"><span>成交量</span><span id="idxDjiVolume">--</span></div>
+      </div>
+      <div class="index-card" data-idx="spx">
+        <div class="index-name">標普指數</div>
+        <div class="index-price" id="idxSpxPrice">--</div>
+        <div class="index-row"><span>開盤</span><span id="idxSpxOpen">--</span></div>
+        <div class="index-row"><span>振幅%</span><span id="idxSpxRange">--</span></div>
+        <div class="index-row"><span>成交量</span><span id="idxSpxVolume">--</span></div>
+      </div>
+      <div class="index-card" data-idx="sox">
+        <div class="index-name">費半指數</div>
+        <div class="index-price" id="idxSoxPrice">--</div>
+        <div class="index-row"><span>開盤</span><span id="idxSoxOpen">--</span></div>
+        <div class="index-row"><span>振幅%</span><span id="idxSoxRange">--</span></div>
+        <div class="index-row"><span>成交量</span><span id="idxSoxVolume">--</span></div>
+      </div>
+      <div class="index-card" data-idx="txf">
+        <div class="index-name">台指期貨</div>
+        <div class="index-price" id="idxTxfPrice">--</div>
+        <div class="index-row"><span>開盤</span><span id="idxTxfOpen">--</span></div>
+        <div class="index-row"><span>振幅%</span><span id="idxTxfRange">--</span></div>
+        <div class="index-row"><span>成交量</span><span id="idxTxfVolume">--</span></div>
+      </div>
+    </div>
+    <div id="indexMsg" class="msg" style="margin-top:10px;"></div>
+    <button class="action" id="indexRefreshBtn" style="margin-top:6px;">重新整理指數</button>
+  </div>
+
+  <!-- ============ 比較:最多 4 檔,比報價/估值/技術指標與區間走勢 ============ -->
+  <div class="main-page" id="page-compare">
+    <div class="toolbar">
+      <input type="text" class="search" id="cmpInput" placeholder="輸入股票代號或名稱, 例如 2330 或 台積電">
+      <button class="action" id="cmpAddBtn">加入比較</button>
+      <button class="action" id="cmpGoBtn">開始比較</button>
+      <button class="soft-btn" id="cmpClearBtn">清空</button>
+    </div>
+    <div class="cmp-chips" id="cmpChips"><span class="chip-placeholder">最多加入 4 檔,加入後按「開始比較」</span></div>
+    <div class="panel">
+      <div class="settings-row">
+        <label>資料模式
+          <select id="cmpModeSelect" class="inline-select">
+            <option value="latest">最新總覽</option>
+            <option value="annual">年度比較</option>
+            <option value="monthly">月份比較</option>
+          </select>
+        </label>
+        <label id="cmpYearWrap" style="display:none;">年度
+          <select id="cmpYearSelect" class="inline-select"></select>
+        </label>
+        <label id="cmpMonthWrap" style="display:none;">月份
+          <select id="cmpMonthSelect" class="inline-select"></select>
+        </label>
+      </div>
+      <div class="metric-picker" id="cmpFieldPicker"></div>
+      <div class="section-note">比較欄位可自由勾選；年度/月份模式可快速翻閱你加入的股票歷史紀錄。</div>
+    </div>
+    <div id="cmpMsg" class="msg"></div>
+    <div id="cmpResult" style="display:none;">
+      <div class="panel">
+        <h2 id="cmpTableTitle">最新總覽比較</h2>
+        <div class="table-scroll">
+          <table class="quote-table" id="cmpTable" style="table-layout:auto;">
+            <thead id="cmpHead"></thead>
+            <tbody id="cmpBody"></tbody>
+          </table>
+        </div>
+        <div class="section-note">本益比/殖利率/股價淨值比來自證交所資料；EPS、BVPS、ROE、營業利率、自由現金流量等由已抓到的財報資料整理。</div>
+      </div>
+      <div class="panel">
+        <h2>區間漲跌幅比較(近 60 個交易日,以首日收盤為基準 100)</h2>
+        <div class="chart-legend" id="cmpLegend"></div>
+        <canvas id="cmpChart" style="width:100%; height:240px;"></canvas>
+        <div class="section-note">滑鼠移到圖上可以看到各檔在同一天的相對表現。</div>
+      </div>
+      <div class="panel">
+        <h2>技術指標比較</h2>
+        <div class="table-scroll">
+          <table class="quote-table" id="cmpTechTable" style="table-layout:auto;">
+            <thead><tr><th>代號/名稱</th><th>KDJ 狀態</th><th>K</th><th>D</th><th>J</th><th>RSI(14)</th><th>5MA 趨勢</th></tr></thead>
+            <tbody id="cmpTechBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 排行榜 ============ -->
+  <div class="main-page" id="page-rank">
+    <div class="panel">
+      <h2>台股排行榜(可切換上市 / 上櫃 / 合併視圖)</h2>
+      <div class="rank-tabs" id="rankTabs">
+        <button data-rank="yield" class="active">殖利率</button>
+        <button data-rank="eps">EPS 推估</button>
+        <button data-rank="pe">本益比</button>
+        <button data-rank="dividend">股利</button>
+        <button data-rank="revenue">營收</button>
+        <button data-rank="recommend">推薦</button>
+      </div>
+      <div class="settings-row">
+        <label>市場範圍
+          <select id="rankScopeSelect" class="inline-select">
+            <option value="listed">上市</option>
+            <option value="otc">上櫃</option>
+            <option value="all" selected>上市＋上櫃</option>
+          </select>
+        </label>
+        <label>股利年度
+          <select id="rankDividendYearSelect" class="inline-select">
+            <option value="all">全部年度</option>
+          </select>
+        </label>
+        <label>顯示名次
+          <select id="rankLimitSelect" class="inline-select">
+            <option value="10">前 10 名</option>
+            <option value="20">前 20 名</option>
+            <option value="30" selected>前 30 名</option>
+            <option value="50">前 50 名</option>
+          </select>
+        </label>
+        <label style="align-self:flex-end;"><button class="soft-btn" id="rankExportBtn">匯出 CSV</button></label>
+      </div>
+      <div id="rankMsg" class="msg"></div>
+      <div id="rankSummary" class="msg" style="color:var(--text-dim);"></div>
+      <div class="table-scroll">
+        <table class="quote-table" id="rankTable" style="table-layout:auto;">
+          <thead id="rankHead"></thead>
+          <tbody id="rankBody"></tbody>
+        </table>
+      </div>
+      <div class="section-note">點一下任何一列,會跳到「股票查詢」直接帶出那檔股票的完整分析。</div>
+    </div>
+  </div>
+
+  <!-- ============ 收藏 ============ -->
+  <div class="main-page" id="page-favorite">
+    <div class="panel">
+      <h2>收藏清單</h2>
+      <div id="favoriteMsg" class="msg" style="color:var(--text-dim);">可從「股票查詢」頁把股票加入收藏，這裡也可以拖曳或按按鈕調整順序。</div>
+
+      <div class="folder-tabs" id="folderTabs"></div>
+      <div class="settings-row" style="margin-bottom:14px;">
+        <input type="text" id="newFolderInput" placeholder="新資料夾名稱" style="max-width:180px;">
+        <button class="soft-btn" id="addFolderBtn">＋ 新增資料夾</button>
+        <button class="mini-btn" id="deleteFolderBtn">刪除目前資料夾</button>
+      </div>
+
+      <div class="table-scroll">
+        <table class="quote-table" id="favoriteTable" style="table-layout:auto;">
+          <thead>
+            <tr>
+              <th style="width:56px;">序列</th>
+              <th style="width:90px;">股票代號</th>
+              <th>股票名稱</th>
+              <th style="width:90px;">成交價</th>
+              <th style="width:90px;">漲跌價</th>
+              <th style="width:90px;">振幅%</th>
+              <th style="width:200px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="favoriteList"></tbody>
+        </table>
+      </div>
+      <div class="fav-hint">提示：股價每次切換分頁會自動重新整理。</div>
+    </div>
+    <div class="panel">
+      <h2>最近查詢</h2>
+      <div id="favoriteHistoryList" class="history-wrap"></div>
+    </div>
+  </div>
+
+  <!-- ============ 資料彙整(整合自資料彙整站) ============ -->
+<div class="main-page" id="page-aggregate">
+
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="mark">股</div>
+      <div>
+        <h1>台股資料彙整站</h1>
+        <div class="sub">STOCK DATA CONSOLIDATOR — 匯入 · 合併 · 檢視</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="n" id="statStocks">0</div><div class="l">檔股票</div></div>
+      <div class="stat"><div class="n" id="statCats">0</div><div class="l">資料類別</div></div>
+      <button class="btn ghost" id="themeToggle" style="align-self:center;" title="切換深色／淺色">🌙</button>
+    </div>
+  </header>
+
+  <div class="import-zone" id="dropZone">
+    <div class="msg">
+      <div><b>拖曳檔案到這裡</b>，或點擊按鈕選擇檔案匯入</div>
+      <div class="hint">支援 Goodinfo 匯出的 .xls（HTML 表格）－ 依「代號」自動合併；重複匯入同類別時，同一股票以最新資料覆蓋舊資料。</div>
+      <div class="hint" style="margin-top:4px;color:var(--amber-dim);">⚠ 資料只存在這台電腦的瀏覽器裡，換電腦要用下方「匯出完整備份」再到新電腦「匯入備份」。</div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn ghost" id="clearBtn">清空全部資料</button>
+      <button class="btn" id="pickBtn">選擇檔案</button>
+      <input type="file" id="fileInput" multiple accept=".xls,.html,.htm">
+    </div>
+  </div>
+
+  <div class="import-zone" id="officialZone" style="flex-direction:column;align-items:stretch;gap:12px;">
+    <div class="msg">
+      <div><b>🌐 抓取證交所官方即時資料</b>（本益比／殖利率／股價淨值比，全上市股票，不用手動匯出檔案）</div>
+      <div class="hint">資料每天由證交所更新一次。</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="workerUrlInput" value="https://red-shadow-40ab.sylvia40254.workers.dev" style="display:none;">
+      <button class="btn" id="fetchRatiosBtn">本益比／殖利率／淨值比</button>
+      <button class="btn" id="fetchEpsBtn">EPS（損益表）</button>
+      <button class="btn" id="fetchEquityBtn">股東權益（資產負債表）</button>
+    </div>
+  </div>
+
+  <div style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <button class="btn" id="top100Btn">📊 產生 Top 100 排行榜</button>
+    <button class="btn" id="aiAnalyzeBtn">🤖 AI 財報分析（推薦 20 檔）</button>
+    <span class="count-badge">一鍵套用收盤價 / EPS / 本益比 / 配息 / 殖利率 / ROE / 法人持股，依達標評分排序</span>
+  </div>
+
+  <div class="categories">
+    <div class="cat-head">已匯入類別（勾選類別顯示全部欄位，點 ▸ 展開可個別勾選細項；★ 為常用指標）</div>
+    <div class="chip-row" id="chipRow">
+      <div class="empty-cats">尚未匯入任何資料</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <input type="text" id="searchInput" placeholder="搜尋代號或名稱…">
+    </div>
+    <select id="scoreFilter" class="btn ghost" style="padding:8px 10px;">
+      <option value="0">顯示全部</option>
+      <option value="1">至少符合 1 項指標</option>
+      <option value="2">至少符合 2 項指標</option>
+      <option value="3">至少符合 3 項指標</option>
+      <option value="all">全部指標都符合</option>
+    </select>
+    <select id="limitFilter" class="btn ghost" style="padding:8px 10px;">
+      <option value="0" selected>顯示全部筆數</option>
+      <option value="20">只看前 20 名</option>
+      <option value="50">只看前 50 名</option>
+      <option value="100">只看前 100 名</option>
+    </select>
+    <div class="count-badge" id="countBadge"></div>
+  </div>
+
+  <div id="legendBar" class="legend-bar" style="display:none;"></div>
+
+  <div class="table-scroll" id="tableScroll">
+    <div class="empty-state">
+      <div class="big">目前沒有資料</div>
+      <div class="small">拖曳或選擇 .xls 檔案開始匯入</div>
+    </div>
+  </div>
+
+  <div class="footer-bar">
+    <div class="left">
+      <button class="btn ghost" id="exportBtn">匯出目前檢視為 CSV</button>
+      <button class="btn ghost" id="backupExportBtn">💾 匯出完整備份</button>
+      <button class="btn ghost" id="backupImportBtn">📥 匯入備份（換電腦用）</button>
+      <input type="file" id="backupFileInput" accept=".json" style="display:none;">
+    </div>
+    <div class="count-badge" id="lastUpdated"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+
+</div>
+
+<!-- ============ 股票查詢 ============ -->
+  <div class="main-page" id="page-stock">
+
+  <div class="toolbar">
+    <div style="position:relative; flex:1; min-width:200px;">
+      <input type="text" class="search" id="stockInput" placeholder="輸入股票代號或名稱,例如 2330 或 台積電" autocomplete="off" style="width:100%;">
+      <div id="stockSuggest" class="suggest-dropdown"></div>
+    </div>
+    <button class="action" id="searchBtn">查詢</button>
+    <button class="soft-btn" id="addFavBtn">加入收藏</button>
+  </div>
+  <div id="searchHistoryBar" class="history-wrap" style="margin-bottom:12px;"></div>
+  <div id="mainMsg" class="msg"></div>
+
+  <div id="resultArea" style="display:none;">
+
+    <div class="panel">
+      <div id="stockTitle" class="quote-title">— 個股報價 —</div>
+      <div class="quote-date" id="quoteDate">日期: --</div>
+      <div class="quote-subtitle" id="quoteSubtitle">當日交易資料</div>
+
+      <div class="table-scroll">
+      <table class="quote-table" style="min-width:640px;">
+        <thead>
+          <tr>
+            <th>成交價</th><th>昨收</th><th>漲跌價</th><th>漲跌幅%</th><th>開盤價</th><th>最高</th><th>最低</th><th>成交張數</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="qPrice">--</td><td id="qPrevClose">--</td><td id="qChange">--</td><td id="qChangePct">--</td>
+            <td id="qOpen">--</td><td id="qHigh">--</td><td id="qLow">--</td><td id="qLots">--</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="quote-updated" id="qTime">--</div>
+    </div>
+
+    <div class="subtabs" id="subTabs">
+      <button data-subtab="tech" class="active">技術分析</button>
+      <button data-subtab="chip">籌碼分析</button>
+      <button data-subtab="fund">基本分析</button>
+      <button data-subtab="fin">財務分析</button>
+      <button data-subtab="news">新聞</button>
+      <button data-subtab="combo">綜合分析</button>
+    </div>
+
+    <!-- ============ 技術分析 ============ -->
+    <div class="subtab-page active" id="subtab-tech">
+      <div class="panel">
+        <h2>技術分析</h2>
+        <div class="period-tabs" id="periodTabs">
+          <button data-period="minute">分</button>
+          <button data-period="day" class="active">日</button>
+          <button data-period="week">週</button>
+          <button data-period="month">月</button>
+        </div>
+        <div id="periodNote" class="msg" style="margin-bottom:8px;"></div>
+
+        <div class="ma-legend" id="maLegend"></div>
+        <div style="position:relative;">
+          <canvas id="priceCanvas"></canvas>
+          <div id="crosshairTip" class="crosshair-tip"></div>
+        </div>
+
+        <div id="kdjStatusBox" style="margin:16px 0;"></div>
+        <div class="kdj-legend" id="kdjLegend"></div>
+        <canvas id="kdjCanvas" style="width:100%; height:150px;"></canvas>
+
+        <div class="macd-legend" id="macdLegend" style="margin-top:16px;"></div>
+        <canvas id="macdCanvas" style="width:100%; height:140px;"></canvas>
+
+        <div class="rsi-legend" id="rsiLegend" style="margin-top:16px;"></div>
+        <canvas id="rsiCanvas" style="width:100%; height:130px;"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2>AI 趨勢解讀</h2>
+        <div class="msg" style="color:var(--text-dim); margin-bottom:10px;">由 Gemini 根據目前 MA/RSI/KDJ/MACD 數值生成,僅供參考,不構成投資建議</div>
+        <button class="action" id="analyzeBtn">產生趨勢解讀</button>
+        <div id="analyzeMsg" class="msg" style="margin-top:10px;"></div>
+        <div id="analyzeResult" style="margin-top:10px; line-height:1.7; font-size:14px; display:none; padding:14px; background:var(--panel-2); border-radius:8px; border:1px solid var(--line);"></div>
+      </div>
+    </div>
+
+    <!-- ============ 籌碼分析 ============ -->
+    <div class="subtab-page" id="subtab-chip">
+      <div class="panel">
+        <h2>外資持股</h2>
+        <div id="chipForeignMsg" class="msg"></div>
+        <div class="table-scroll">
+        <table class="quote-table" style="min-width:640px;">
+          <thead><tr><th>發行股數</th><th>外資尚可投資股數</th><th>外資持有股數</th><th>外資尚可投資比率%</th><th>外資持股比率%</th></tr></thead>
+          <tbody><tr>
+            <td id="cfIssued">--</td><td id="cfAvailable">--</td><td id="cfHeld">--</td>
+            <td id="cfAvailPct">--</td><td id="cfRatio">--</td>
+          </tr></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>三大法人買賣超(股)</h2>
+        <div class="msg" style="color:var(--text-dim);">注意:這是「當日買賣超」進出量,不是「總持股比例」——投信沒有官方公布的持股比例統計,只能看買賣超動向</div>
+        <div id="chipInstMsg" class="msg"></div>
+        <div class="table-scroll">
+        <table class="quote-table" style="min-width:480px;">
+          <thead><tr><th>外資買賣超</th><th>投信買賣超</th><th>自營商買賣超</th><th>三大法人合計</th></tr></thead>
+          <tbody><tr>
+            <td id="ciForeign">--</td><td id="ciTrust">--</td><td id="ciDealer">--</td><td id="ciTotal">--</td>
+          </tr></tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 基本分析 ============ -->
+    <div class="subtab-page" id="subtab-fund">
+      <div class="panel">
+        <h2>基本資料</h2>
+        <div id="profileMsg" class="msg"></div>
+        <div class="table-scroll">
+          <table class="quote-table" id="profileTable" style="table-layout:auto;">
+            <thead id="profileHead"></thead>
+            <tbody id="profileBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 財務分析 ============ -->
+    <div class="subtab-page" id="subtab-fin">
+      <div class="panel">
+        <h2>估值指標</h2>
+        <div class="table-scroll">
+        <table class="quote-table" style="min-width:400px;">
+          <thead><tr><th>本益比(PE)</th><th>殖利率%</th><th>股價淨值比(PBR)</th></tr></thead>
+          <tbody><tr>
+            <td id="finPER">--</td><td id="finYield">--</td><td id="finPBR">--</td>
+          </tr></tbody>
+        </table>
+        </div>
+        <div class="msg" style="color:var(--text-dim); margin-top:8px;">來源:證交所官方即時資料</div>
+      </div>
+
+      <div class="fin-tabs" id="finTabs">
+        <button data-fintab="revenue" class="active">月營收狀況</button>
+        <button data-fintab="profit">獲利狀況</button>
+        <button data-fintab="dividend">股利歷史</button>
+        <button data-fintab="balance">資產負債</button>
+      </div>
+      <select class="fin-tabs-mobile-select" id="finTabsMobileSelect">
+        <option value="revenue">月營收狀況</option>
+        <option value="profit">獲利狀況</option>
+        <option value="dividend">股利歷史</option>
+        <option value="balance">資產負債</option>
+      </select>
+
+      <div class="fin-tab-page active" id="fintab-revenue">
+        <div class="panel">
+          <h2>月營收狀況(近幾年,來源:FinMind)</h2>
+          <div id="finRevenueMsg" class="msg"></div>
+          <canvas id="finRevenueChart" style="width:100%; height:160px; margin-bottom:14px;"></canvas>
+          <div class="table-scroll">
+            <table class="quote-table" id="finRevenueTable" style="table-layout:auto;">
+              <thead><tr><th>年/月</th><th>單月營收(億)</th><th>月增%</th><th>年增%</th><th>累計營收(億)</th><th>累計年增%</th></tr></thead>
+              <tbody id="finRevenueBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="fin-tab-page" id="fintab-profit">
+        <div class="panel">
+          <h2>獲利狀況(逐年,來源:FinMind)</h2>
+          <div id="finProfitMsg" class="msg"></div>
+          <div class="chart-legend" id="finProfitChartLegend"></div>
+          <canvas id="finProfitChart" style="width:100%; height:160px; margin-bottom:8px;"></canvas>
+          <canvas id="finEpsChart" style="width:100%; height:130px; margin-bottom:14px;"></canvas>
+          <div class="table-scroll">
+            <table class="quote-table" id="finProfitTable" style="table-layout:auto;">
+              <thead><tr><th>年度</th><th>營收(億)</th><th>稅後淨利(億)</th><th>毛利率%</th><th>營業利益率%</th><th>稅後淨利率%</th><th>EPS(元)</th></tr></thead>
+              <tbody id="finProfitBody"></tbody>
+            </table>
+          </div>
+          <div class="msg" style="color:var(--text-dim); margin-top:8px;">年度數字是該年度四季加總(不是官方年報原始數字),EPS 也是四季加總概算,可能跟公司年報公告數字有些微差異</div>
+        </div>
+      </div>
+
+      <div class="fin-tab-page" id="fintab-dividend">
+        <div class="panel">
+          <h2>股利歷史(來源:FinMind)</h2>
+          <div id="dividendMsg" class="msg"></div>
+          <canvas id="dividendChart" style="width:100%; height:180px; margin-bottom:14px;"></canvas>
+          <div class="table-scroll">
+            <table class="quote-table" id="dividendTable" style="table-layout:auto;">
+              <thead>
+                <tr>
+                  <th>年度</th><th>配息頻率</th><th>現金股利(元/股)</th><th>股票股利(元/股)</th>
+                  <th>EPS(元)</th><th>殖利率%(用現價概算)</th>
+                  <th>除息日</th><th>除權日</th><th>現金股利發放日</th>
+                </tr>
+              </thead>
+              <tbody id="dividendBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="fin-tab-page" id="fintab-balance">
+        <div class="panel">
+          <h2>資產負債(逐年,來源:FinMind)</h2>
+          <div id="finBalanceMsg" class="msg"></div>
+          <div class="table-scroll">
+            <table class="quote-table" id="finBalanceTable" style="table-layout:auto;">
+              <thead><tr><th>年度</th><th>現金占資產%</th><th>應收帳款占資產%</th><th>存貨占資產%</th><th>負債總額占資產%</th><th>每股淨值BPS(元)</th></tr></thead>
+              <tbody id="finBalanceBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 新聞 ============ -->
+    <div class="subtab-page" id="subtab-news">
+      <div class="panel">
+        <h2>新聞情緒分析</h2>
+        <div class="settings-row">
+          <input type="text" class="search" id="newsKeyword" placeholder="搜尋關鍵字,預設用目前股票名稱" style="max-width:260px;">
+          <button class="action" id="newsFetchBtn">抓取新聞並分析</button>
+        </div>
+        <div id="newsMsg" class="msg"></div>
+        <div id="newsSummaryBox" style="display:none; margin-bottom:16px;">
+          <div class="msg" style="color:var(--text-dim); margin-bottom:6px;">整體市場情緒(AI 統整,僅供參考)</div>
+          <div id="newsSummaryText" style="line-height:1.7; font-size:14px; padding:14px; background:var(--panel-2); border-radius:8px; border:1px solid var(--line);"></div>
+          <div class="chart-legend" id="newsSentimentCount" style="margin-top:10px;"></div>
+        </div>
+        <div id="newsList"></div>
+      </div>
+    </div>
+
+    <!-- ============ 綜合分析 ============ -->
+    <div class="subtab-page" id="subtab-combo">
+      <div class="panel">
+        <h2>AI 綜合分析</h2>
+        <div class="msg" style="color:var(--text-dim); margin-bottom:10px;">結合技術指標與近期新聞,由 Gemini 一次生成策略結論與投資報告,僅供參考,不構成投資建議</div>
+        <button class="action" id="comboRunBtn">產生綜合分析</button>
+        <div id="comboMsg" class="msg" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="panel" id="comboStrategyCard" style="display:none;">
+        <h2>策略結論</h2>
+        <div id="comboTrendBadge" style="margin-bottom:12px;"></div>
+        <div id="comboStrategyText" style="line-height:1.8; font-size:14px;"></div>
+      </div>
+
+      <div class="panel" id="comboReportCard" style="display:none;">
+        <h2>AI 投資報告</h2>
+        <div class="report-section">
+          <div class="report-label">1. 基本資訊</div>
+          <div id="comboBasicInfo" class="report-body"></div>
+        </div>
+        <div class="report-section">
+          <div class="report-label">2. 技術分析</div>
+          <div id="comboTechNote" class="report-body"></div>
+        </div>
+        <div class="report-section">
+          <div class="report-label">3. 新聞摘要</div>
+          <div id="comboNewsSummary" class="report-body"></div>
+        </div>
+        <div class="report-section">
+          <div class="report-label">4. AI 評估</div>
+          <div id="comboAiAssess" class="report-body"></div>
+        </div>
+        <div class="report-section">
+          <div class="report-label">5. 風險提示</div>
+          <div class="report-body" style="color:var(--text-dim);">本報告由 AI 模型根據公開資料自動生成,可能存在誤判或資訊延遲,不具備任何投資顧問資格,僅供參考,不構成投資建議。投資一定有風險,請自行審慎判斷並承擔相關風險。</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  </div>
+</div>
+
+
+<!-- 原本 HTML/CSS/JS 全部擠在同一個檔案裡(超過六千行)。
+     現在拆成: css/styles.css(樣式) + js/*.js(邏輯,用 ES Modules)。
+     這是原生瀏覽器模組,不需要 webpack/vite 等打包工具,
+     但一定要用 http(s) 伺服器開(例如 `npx serve .` 或 `python3 -m http.server`),
+     不能直接雙擊用 file:// 開啟,詳見 README.md。 -->
+<script type="module" src="js/main.js"></script>
+
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79"}' crossorigin="anonymous"></script>
+</body>
+</html>
